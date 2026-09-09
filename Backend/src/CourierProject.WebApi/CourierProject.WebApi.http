@@ -1,0 +1,6 @@
+@CourierProject.WebApi_HostAddress = http://localhost:5004
+
+GET {{CourierProject.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
