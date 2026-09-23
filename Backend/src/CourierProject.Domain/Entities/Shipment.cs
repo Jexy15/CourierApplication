@@ -22,7 +22,7 @@ public class Shipment
     public string ServiceCode { get; private set; }
     public string ServiceName { get; private set; }
     public ShipmentPhase Phase { get; private set; }
-    public ShipmentAnomaly? Anomaly {  get; private set; }
+    public ShipmentAnomaly? Anomaly { get; private set; }
     public DateTime? EstimatedDeliveryDate { get; private set; }
     #endregion
 
@@ -31,9 +31,9 @@ public class Shipment
     #endregion
 
     #region Parti spedizione
-    public Contact Sender {  get; private set; }
+    public Contact Sender { get; private set; }
     public Address SenderAddress { get; private set; }
-    public Contact  Recipient { get; private set; }
+    public Contact Recipient { get; private set; }
     public Address RecipientAddress { get; private set; }
     #endregion
 
