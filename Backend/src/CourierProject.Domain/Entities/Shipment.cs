@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using CourierProject.Domain.Enums;
+﻿using CourierProject.Domain.Enums;
 using CourierProject.Domain.ValueObjects;
 
 namespace CourierProject.Domain.Entities;
+
 public class Shipment
 {
     #region Identità
