@@ -64,7 +64,8 @@ public class Shipment
     private readonly List<ShipmentCharge> _charges = new();
     public IReadOnlyCollection<ShipmentCharge> Charges => _charges.AsReadOnly();
     #endregion
-    /// <summary>Richiesto da EF Core per la materializzazione.</summary>
+
+    // <summary>Richiesto da EF Core per la materializzazione.</summary>
 
     private Shipment()
     {
@@ -75,4 +76,103 @@ public class Shipment
         ServiceCode = null!;
         ServiceName = null!;
     }
+
+    #region Creazione
+    /// Prenota una spedizione PRIMA di chiamare il corriere (reserve-then-call).
+    /// L'inserimento di questa riga è il modo in cui si prende possesso della
+    /// chiave di idempotenza: il vincolo univoco su (UserId, IdempotencyKey)
+    /// funziona da lock distribuito.
+    ///
+    /// La spedizione nasce in fase Created, senza tracking number e senza
+    /// prezzo: li fornirà il corriere alla conferma.
+    /// </summary>
+    /// <param name="packages">Almeno un collo. Fissati da qui in poi.</param>
+    /// <param name="surcharges">Supplementi richiesti. Vuoto se nessuno.</param>
+    /// <param name="nowUtc">Istante corrente, fornito dall'Application
+    /// tramite TimeProvider. Deve essere UTC.</param>
+    public static Shipment Reserve(
+    int userId,
+    Guid idempotencyKey,
+    CarrierCode carrierCode,
+    string serviceCode,
+    string serviceName,
+    Contact sender,
+    Address senderAddress,
+    Contact recipient,
+    Address recipientAddress,
+    IReadOnlyCollection<Package> packages,
+    IReadOnlyCollection<ShipmentSurcharge> surcharges,
+    DateTime nowUtc)
+    {
+        if (userId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(userId), "UserId must be positive.");
+
+        // Guid.Empty = il client non ha mandato la chiave. Accettarla farebbe
+        // collidere tutte le richieste senza chiave dello stesso utente.
+        if (idempotencyKey == Guid.Empty)
+            throw new ArgumentException("IdempotencyKey cannot be empty.", nameof(idempotencyKey));
+
+        if (!Enum.IsDefined(carrierCode))
+            throw new ArgumentOutOfRangeException(nameof(carrierCode), "Unknown carrier.");
+
+        if (string.IsNullOrWhiteSpace(serviceCode))
+            throw new ArgumentException("ServiceCode is required.", nameof(serviceCode));
+
+        if (string.IsNullOrWhiteSpace(serviceName))
+            throw new ArgumentException("ServiceName is required.", nameof(serviceName));
+
+        ArgumentNullException.ThrowIfNull(sender);
+        ArgumentNullException.ThrowIfNull(senderAddress);
+        ArgumentNullException.ThrowIfNull(recipient);
+        ArgumentNullException.ThrowIfNull(recipientAddress);
+        ArgumentNullException.ThrowIfNull(packages);
+        ArgumentNullException.ThrowIfNull(surcharges);
+
+        if (packages.Count == 0)
+            throw new ArgumentException("A shipment requires at least one package.", nameof(packages));
+
+        if (packages.Any(p => p is null))
+            throw new ArgumentException("Packages cannot contain null items.", nameof(packages));
+
+        if (surcharges.Any(s => s is null))
+            throw new ArgumentException("Surcharges cannot contain null items.", nameof(surcharges));
+
+        if (surcharges.GroupBy(s => s.Type).Any(g => g.Count() > 1))
+            throw new ArgumentException("Each surcharge type can be requested only once.", nameof(surcharges));
+
+        EnsureUtc(nowUtc, nameof(nowUtc));
+
+        var shipment = new Shipment
+        {
+            UserId = userId,
+            IdempotencyKey = idempotencyKey,
+            CarrierCode = carrierCode,
+            ServiceCode = serviceCode.Trim(),
+            ServiceName = serviceName.Trim(),
+            Sender = sender,
+            SenderAddress = senderAddress,
+            Recipient = recipient,
+            RecipientAddress = recipientAddress,
+            Phase = ShipmentPhase.Created,
+            CreatedAt = nowUtc,
+            UpdatedAt = nowUtc
+        };
+
+        shipment._packages.AddRange(packages);
+        shipment._surcharges.AddRange(surcharges);
+
+        return shipment;
+    }
+    #endregion
+
+
+    #region Helper
+
+    private static void EnsureUtc(DateTime value, string paramName)
+    {
+        if (value.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("DateTime must be UTC.", paramName);
+    }
+
+    #endregion
 }
